@@ -133,6 +133,62 @@ conteo_menciones.columns = ["Jugador", "Menciones"]
 conteo_menciones.insert(0, "Posición", range(1, len(conteo_menciones) + 1))
 st.dataframe(conteo_menciones)
 
+# Evolución de puntos por jugador
+st.markdown("<h3 style='text-align: center;'>Evolución de puntos por jugador</h3>", unsafe_allow_html=True)
+jugador_seleccionado = st.selectbox("Selecciona un jugador", df_evolutivo["Jugador"].unique())
+df_jugador = df_evolutivo[df_evolutivo["Jugador"] == jugador_seleccionado].sort_values("Fecha")
+fig, ax = plt.subplots()
+ax.plot(df_jugador["Fecha"], df_jugador["Puntos"], marker="o")
+ax.set_title(f"Evolución de {jugador_seleccionado}")
+ax.set_xlabel("Fecha")
+ax.set_ylabel("Puntos")
+ax.grid(True)
+st.pyplot(fig)
+
+# Resumen de goles por fecha y análisis
+resumen_base = df.groupby(["fecha", "equipo"])["goles"].sum().reset_index()
+resumen_goles = resumen_base.pivot(index="fecha", columns="equipo", values="goles")
+
+for equipo in ["Azul", "Amarillo"]:
+    if equipo not in resumen_goles.columns:
+        resumen_goles[equipo] = 0
+
+resumen_goles = resumen_goles[["Amarillo", "Azul"]].fillna(0)
+
+for _, row in df[df["autogoles"] > 0].iterrows():
+    fecha = row["fecha"]
+    equipo_contrario = "Amarillo" if row["equipo"] == "Azul" else "Azul"
+    if fecha in resumen_goles.index:
+        resumen_goles.at[fecha, equipo_contrario] += row["autogoles"]
+    else:
+        resumen_goles.loc[fecha] = {"Azul": 0, "Amarillo": 0}
+        resumen_goles.at[fecha, equipo_contrario] = row["autogoles"]
+
+resumen_goles = resumen_goles.astype(int).reset_index()
+resumen_goles["Resultado"] = resumen_goles.apply(
+    lambda row: "Empate" if row["Azul"] == row["Amarillo"] else ("Azul" if row["Azul"] > row["Amarillo"] else "Amarillo"), axis=1
+)
+resumen_goles = resumen_goles.sort_values(by="fecha", ascending=False)
+st.markdown("<h3 style='text-align: center;'>Resumen goles por fecha</h3>", unsafe_allow_html=True)
+st.dataframe(resumen_goles)
+
+# Resumen anual
+st.subheader("Resumen Anual de Goles por Equipo")
+total_partidos = df["fecha"].nunique()
+goles_equipo = df.groupby("equipo")["goles"].sum()
+autogoles_equipo = df[df["autogoles"] > 0].copy()
+autogoles_equipo["equipo_beneficiado"] = autogoles_equipo["equipo"].apply(lambda x: "Amarillo" if x == "Azul" else "Azul")
+autogoles_por_equipo = autogoles_equipo.groupby("equipo_beneficiado")["autogoles"].sum()
+total_goles = goles_equipo.add(autogoles_por_equipo, fill_value=0).reset_index()
+total_goles.columns = ["equipo", "goles"]
+total_goles["Promedio Goles por Fecha"] = total_goles["goles"] / total_partidos
+st.dataframe(total_goles)
+
+st.subheader("Promedio Total de Goles por Partido")
+total_goles_general = total_goles["goles"].sum()
+promedio_general = total_goles_general / total_partidos
+st.metric(label="⚽ Promedio General de Goles por Partido", value=round(promedio_general, 2))
+
 # Ranking MVP del Año
 st.markdown("<h3 style='text-align: center;'>Ranking MVP del año</h3>", unsafe_allow_html=True)
 mvp = df_acumulado.merge(conteo_menciones, on="Jugador", how="left")
