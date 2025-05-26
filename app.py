@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from io import BytesIO
 
 st.set_page_config(page_title="Estadísticas de Fútbol", layout="wide")
-st.title("⚽ Estadísticas Legendarios FC")
+st.title("⚽ Generador de Estadísticas Legendarios FC")
 
 
 from datetime import datetime
@@ -15,8 +15,12 @@ st.markdown(f"<div style='text-align: right; font-size: 12px; color: gray;'>Últ
 
 # Ingreso de clave
 clave_usuario = st.sidebar.text_input("🔐 Ingresa tu código de acceso", type="password")
-es_admin = clave_usuario == "admin_gember2025"
-es_jugador = clave_usuario == "LEGENDARIOS2025"
+st.sidebar.markdown(f"🔍 Clave ingresada: `{clave_usuario}`")
+es_admin = clave_usuario == "admin_gember2024"
+es_jugador = clave_usuario == "LEGENDARIOS2024"
+st.sidebar.markdown(f"👤 Admin: {es_admin}, Jugador: {es_jugador}")
+es_admin = clave_usuario == "admin_gember2024"
+es_jugador = clave_usuario == "LEGENDARIOS2024"
 
 # Validación de acceso
 if not (es_admin or es_jugador):
@@ -24,9 +28,9 @@ if not (es_admin or es_jugador):
     st.stop()
 
 # Cargar archivo fijo desde el repositorio
-    datos_path = "datos.xlsx"
-    jugadores_df = pd.read_excel(datos_path, sheet_name="Jugadores")
-    df = pd.read_excel(datos_path, sheet_name="Partidos")
+datos_path = "datos.xlsx"
+jugadores_df = pd.read_excel(datos_path, sheet_name="Jugadores")
+df = pd.read_excel(datos_path, sheet_name="Partidos")
     jugadores_df = pd.read_excel(uploaded_file, sheet_name="Jugadores")
     df = pd.read_excel(uploaded_file, sheet_name="Partidos")
     df = df[df["equipo"].notna()]
