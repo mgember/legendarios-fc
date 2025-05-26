@@ -11,13 +11,13 @@ col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
     logo = Image.open("logo.png")
     st.image(logo, width=120)
-st.title("⚽ Estadísticas Legendarios FC")
+st.title("⚽ Generador de Estadísticas Legendarios FC")
 
 ultima_actualizacion = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 st.markdown(f"<div style='text-align: right; font-size: 12px; color: gray;'>Última actualización: {ultima_actualizacion}</div>", unsafe_allow_html=True)
 
 # Ingreso de clave
-clave_usuario = st.sidebar.text_input("🔐 Ingresa tu código de acceso", type="password")
+clave_usuario = st.text_input("🔐 Ingresa tu código de acceso", type="password")
 if clave_usuario != "LEGENDARIOS2025":
     st.warning("⚠️ Ingresa el código correcto para ver las estadísticas.")
     st.stop()
