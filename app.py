@@ -17,7 +17,7 @@ st.markdown(f"<div style='text-align: right; font-size: 12px; color: gray;'>Últ
 
 # Ingreso de clave
 clave_usuario = st.sidebar.text_input("🔐 Ingresa tu código de acceso", type="password")
-if clave_usuario != "LEGENDARIOS2025":
+if clave_usuario != LEGENDARIOS2025:
     st.warning("⚠️ Ingresa el código correcto para ver las estadísticas.")
     st.stop()
 
