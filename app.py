@@ -5,11 +5,12 @@ from io import BytesIO
 from datetime import datetime
 
 st.set_page_config(page_title="Estadísticas de Fútbol", layout="wide")
-st.markdown("""
-    <div style='text-align: center;'>
-        <img src='logo.png' width='120' style='border-radius: 20px;'>
-    </div>
-""", unsafe_allow_html=True)
+from PIL import Image
+
+col1, col2, col3 = st.columns([1, 2, 1])
+with col2:
+    logo = Image.open("logo.png")
+    st.image(logo, width=120)
 st.title("⚽ Generador de Estadísticas Legendarios FC")
 
 ultima_actualizacion = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
