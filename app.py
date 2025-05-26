@@ -5,19 +5,20 @@ from io import BytesIO
 from datetime import datetime
 
 st.set_page_config(page_title="Estadísticas de Fútbol", layout="wide")
-st.title("⚽ Generador de Estadísticas Legendarios FC")
+st.markdown("""
+    <div style='text-align: center;'>
+        <img src='logo.png' width='120' style='border-radius: 20px;'>
+    </div>
+""", unsafe_allow_html=True)
+st.title("⚽ Estadísticas Legendarios FC")
 
 ultima_actualizacion = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 st.markdown(f"<div style='text-align: right; font-size: 12px; color: gray;'>Última actualización: {ultima_actualizacion}</div>", unsafe_allow_html=True)
 
 # Ingreso de clave
 clave_usuario = st.sidebar.text_input("🔐 Ingresa tu código de acceso", type="password")
-es_admin = clave_usuario == "admin_gember2024"
-es_jugador = clave_usuario == "LEGENDARIOS2024"
-
-# Validación de acceso
-if not (es_admin or es_jugador):
-    st.warning("⚠️ Ingresa un código válido para ver las estadísticas.")
+if clave_usuario != "LEGENDARIOS2025":
+    st.warning("⚠️ Ingresa el código correcto para ver las estadísticas.")
     st.stop()
 
 # Cargar archivo fijo desde el repositorio
