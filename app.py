@@ -246,7 +246,34 @@ ax.bar(total_goles["equipo"], total_goles["Promedio Goles por Fecha"], color=["b
 ax.set_ylabel("Promedio")
 ax.set_title("Promedio Goles por Fecha por Equipo")
 ax.set_ylim(0, max(total_goles["Promedio Goles por Fecha"]) + 0.5)
-st.pyplot(fig))
+st.pyplot(fig)
+
+# Comparativo de Tarjetas Amarillas por Equipo
+st.subheader("Comparativo de Tarjetas Amarillas por Equipo")
+amarillas_equipo = df.groupby("equipo")["tarjetas_amarillas"].sum().reset_index()
+fig, ax = plt.subplots()
+ax.bar(amarillas_equipo["equipo"], amarillas_equipo["tarjetas_amarillas"], color=["blue" if e == "Azul" else "yellow" for e in amarillas_equipo["equipo"]])
+ax.set_title("Total de Tarjetas Amarillas por Equipo")
+ax.set_ylabel("Cantidad")
+st.pyplot(fig)
+
+# Comparativo de Tarjetas Rojas por Equipo
+st.subheader("Comparativo de Tarjetas Rojas por Equipo")
+rojas_equipo = df.groupby("equipo")["tarjetas_rojas"].sum().reset_index()
+fig, ax = plt.subplots()
+ax.bar(rojas_equipo["equipo"], rojas_equipo["tarjetas_rojas"], color=["blue" if e == "Azul" else "yellow" for e in rojas_equipo["equipo"]])
+ax.set_title("Total de Tarjetas Rojas por Equipo")
+ax.set_ylabel("Cantidad")
+st.pyplot(fig)
+
+# Comparativo de Puntos Totales por Equipo
+st.subheader("Comparativo de Puntos Totales por Equipo")
+puntos_equipo = df.groupby("equipo")["puntos"].sum().reset_index()
+fig, ax = plt.subplots()
+ax.bar(puntos_equipo["equipo"], puntos_equipo["puntos"], color=["blue" if e == "Azul" else "yellow" for e in puntos_equipo["equipo"]])
+ax.set_title("Puntos Totales por Equipo")
+ax.set_ylabel("Puntos")
+st.pyplot(fig)
 
 # Ranking MVP del Año
 st.markdown("<h3 style='text-align: center;'>Ranking MVP del año</h3>", unsafe_allow_html=True)
