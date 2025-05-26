@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from io import BytesIO
 
 st.set_page_config(page_title="Estadísticas de Fútbol", layout="wide")
-st.title("⚽ Generador de Estadísticas Legendarios FC")
+st.title("⚽ Estadísticas Legendarios FC")
 
 
 from datetime import datetime
