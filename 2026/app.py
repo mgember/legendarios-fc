@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 from PIL import Image
 import math
+import numpy as np
 
 # =========================
 # Configuración Streamlit
@@ -263,13 +264,29 @@ agg["puntos_total"] = agg["puntos_partido_total"] + agg["penal_umbral_amarillas"
 agg.loc[agg["sancion_grave"] == 1, "puntos_total"] = 0
 
 # Valla menos vencida (solo arqueros) = promedio goles recibidos / partidos
-agg["valla_promedio"] = None
-mask_arq = (agg["posicion"] == "arquero") & (agg["partidos_jugados"] > 0)
-agg.loc[mask_arq, "valla_promedio"] = (agg.loc[mask_arq, "goles_recibidos_total"] / agg.loc[mask_arq, "partidos_jugados"]).round(3)
+# agg["valla_promedio"] = None
+# mask_arq = (agg["posicion"] == "arquero") & (agg["partidos_jugados"] > 0)
+# agg.loc[mask_arq, "valla_promedio"] = (agg.loc[mask_arq, "goles_recibidos_total"] / agg.loc[mask_arq, "partidos_jugados"]).round(3)
 
 # Puntos ajustados arquero = puntos_total - valla_promedio
-agg["puntos_arquero_ajustados"] = agg["puntos_total"]
-agg.loc[mask_arq, "puntos_arquero_ajustados"] = (agg.loc[mask_arq, "puntos_total"] - agg.loc[mask_arq, "valla_promedio"]).round(3)
+# agg["puntos_arquero_ajustados"] = agg["puntos_total"]
+# agg.loc[mask_arq, "puntos_arquero_ajustados"] = (agg.loc[mask_arq, "puntos_total"] - agg.loc[mask_arq, "valla_promedio"]).round(3)
+
+agg["valla_promedio"] = np.nan
+mask_arq = (agg["posicion"] == "arquero") & (agg["partidos_jugados"] > 0)
+
+agg.loc[mask_arq, "valla_promedio"] = (
+    agg.loc[mask_arq, "goles_recibidos_total"] / agg.loc[mask_arq, "partidos_jugados"]
+)
+
+# asegurar dtype numérico y redondear
+agg["valla_promedio"] = pd.to_numeric(agg["valla_promedio"], errors="coerce").round(3)
+
+agg["puntos_arquero_ajustados"] = agg["puntos_total"].astype(float)
+agg.loc[mask_arq, "puntos_arquero_ajustados"] = (
+    (agg.loc[mask_arq, "puntos_total"].astype(float) - agg.loc[mask_arq, "valla_promedio"])
+    .round(3)
+)
 
 # =========================
 # Funciones de ranking con desempate
