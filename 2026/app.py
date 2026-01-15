@@ -13,7 +13,7 @@ st.set_page_config(page_title="Estadísticas Legendarios FC 2026", layout="wide"
 col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
     try:
-        logo = Image.open("logo.png")
+        logo = Image.open("2026/logo.png")
         st.image(logo, width=120)
     except Exception:
         pass
@@ -38,7 +38,7 @@ if clave_usuario != CLAVE:
 # =========================
 # Parámetros / constantes
 # =========================
-DATA_FILE = "estadisticas_2026.xlsx"
+DATA_FILE = "2026/estadisticas_2026.xlsx"
 HOJA_J = "Jugadores"
 HOJA_P = "Partidos"
 HOJA_E = "Eventos"
