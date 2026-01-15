@@ -36,6 +36,14 @@ if clave_usuario != CLAVE:
     st.warning("⚠️ Ingresa el código correcto para ver las estadísticas.")
     st.stop()
 
+# ========================
+
+if st.button("🔄 Recargar datos (limpiar cache)"):
+    st.cache_data.clear()
+    st.rerun()
+
+# =========================
+
 # =========================
 # Parámetros / constantes
 # =========================
