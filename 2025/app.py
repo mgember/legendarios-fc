@@ -9,7 +9,7 @@ from PIL import Image
 
 col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
-    logo = Image.open("logo.png")
+    logo = Image.open("2025/logo.png")
     st.image(logo, width=120)
 st.title("⚽ Generador de Estadísticas Legendarios FC")
 
@@ -23,7 +23,7 @@ if clave_usuario != "LEGENDARIOS2025":
     st.stop()
 
 # Cargar archivo fijo desde el repositorio
-datos_path = "datos.xlsx"
+datos_path = "2025/datos.xlsx"
 jugadores_df = pd.read_excel(datos_path, sheet_name="Jugadores")
 df = pd.read_excel(datos_path, sheet_name="Partidos")
 df = df[df["equipo"].notna()]
