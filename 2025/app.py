@@ -11,7 +11,7 @@ col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
     logo = Image.open("2025/logo.png")
     st.image(logo, width=120)
-st.title("⚽ Estadísticas Legendarios FC - 2025")
+st.title("⚽ Estadísticas Legendarios FC - Temporada 2025")
 
 ultima_actualizacion = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 st.markdown(f"<div style='text-align: right; font-size: 12px; color: gray;'>Última actualización: {ultima_actualizacion}</div>", unsafe_allow_html=True)
