@@ -28,7 +28,10 @@ st.markdown("""
 def df_highlight(df: pd.DataFrame, highlight_col: str, formats: dict | None = None):
     sty = df.style
     if formats:
-        sty = sty.format(formats)
+        sty = sty.format(formats, na_rep="—")
+    else:
+        sty = sty.format(precision=2, na_rep="—")  # 👈 default 2 decimales
+
     if highlight_col in df.columns:
         sty = sty.set_properties(
             subset=[highlight_col],
