@@ -4,9 +4,6 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 from PIL import Image
 
-pd.set_option("display.precision", 2)
-pd.set_option("display.float_format", lambda x: f"{x:.2f}")
-
 # =========================
 # Configuración Streamlit
 # =========================
@@ -27,13 +24,43 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Helper de estilo para resaltar una columna
+# =========================
+# Helpers de display (ANTI 0.000000)
+# =========================
+def _auto_formats_for_df(df: pd.DataFrame) -> dict:
+    """
+    Genera formats para TODAS las columnas numéricas:
+    - ints: sin decimales
+    - floats: 2 decimales
+    """
+    fmts = {}
+    for c in df.columns:
+        s = df[c]
+        # intentar convertir a numérico sin romper strings
+        if pd.api.types.is_numeric_dtype(s):
+            if pd.api.types.is_integer_dtype(s):
+                fmts[c] = "{:d}"
+            elif pd.api.types.is_float_dtype(s):
+                fmts[c] = "{:.2f}"
+        else:
+            # a veces vienen como object pero en realidad son números
+            s2 = pd.to_numeric(s, errors="coerce")
+            if s2.notna().any():
+                # si hay decimales -> float, si no -> int
+                # (pero para no arriesgar, todo a 2 decimales)
+                fmts[c] = "{:.2f}"
+    return fmts
+
 def df_highlight(df: pd.DataFrame, highlight_col: str, formats: dict | None = None):
-    sty = df.style
+    """
+    - Siempre aplica formateo estable: enteros sin decimales, floats a 2 decimales.
+    - Si pasas formats, se mezcla con el auto-formato (tú mandas).
+    """
+    auto = _auto_formats_for_df(df)
     if formats:
-        sty = sty.format(formats, na_rep="—")
-    else:
-        sty = sty.format(precision=2, na_rep="—")  # 👈 default 2 decimales
+        auto.update(formats)
+
+    sty = df.style.format(auto, na_rep="—")
 
     if highlight_col in df.columns:
         sty = sty.set_properties(
@@ -265,7 +292,6 @@ def acumulados_hasta_fecha(base_df, fecha_limite):
 
     return agg_f
 
-
 base["activo"] = pd.to_numeric(base["activo"], errors="coerce").fillna(0).astype(int)
 base["sancion_grave"] = pd.to_numeric(base["sancion_grave"], errors="coerce").fillna(0).astype(int)
 
@@ -450,7 +476,6 @@ def build_ranking_dia(base_dia: pd.DataFrame, pos: str) -> pd.DataFrame:
         dfp = base_dia[(base_dia["posicion"] == "defensa") & (base_dia["fue_delantero"] == 0)].copy()
         if dfp.empty:
             return dfp
-        # puntos normales
         dfp["puntos_rank"] = pd.to_numeric(dfp["puntos_partido"], errors="coerce").fillna(0.0).astype(float)
 
     elif pos == "delantero":
@@ -470,7 +495,6 @@ def build_ranking_dia(base_dia: pd.DataFrame, pos: str) -> pd.DataFrame:
         pr = pd.to_numeric(dfp["puntos_resultado"], errors="coerce").fillna(0.0).astype(float)
         pc = pd.to_numeric(dfp["partido_completado"], errors="coerce").fillna(1.0).astype(float)
 
-        # Regla especial SOLO para defensas que jugaron de delantero
         dfp.loc[mask_def_as_del, "puntos_rank"] = (pr[mask_def_as_del] * pc[mask_def_as_del]) + (bonus_3g[mask_def_as_del] * pc[mask_def_as_del])
 
     else:
@@ -515,7 +539,7 @@ for i, pos in enumerate(pos_list):
         else:
             show = r[["posicion_ranking","nombre","puntos","partido_completado","goles","asistencia_gol","amarillas","rojas"]].copy()
             st.dataframe(
-                df_highlight(show, "puntos", formats={"puntos": "{:.2f}", "partido_completado": "{:.2f}"}),
+                df_highlight(show, "puntos"),
                 use_container_width=True
             )
 
@@ -542,15 +566,13 @@ def show_rank_acum(pos):
             "partidos_jugados","partidos_equivalentes","goles","asistencia_gol","amarillas","rojas"
         ]
         highlight = "puntos_arquero_ajustados"
-        fmts = {"puntos_arquero_ajustados": "{:.2f}", "valla_2d": "{:.2f}"}
     else:
         ranked = rank_puntos(dfp, use_arquero_ajustado=False)
         show_cols = ["posicion_ranking","nombre","puntos_total","partidos_jugados","partidos_equivalentes","goles","asistencia_gol","amarillas","rojas"]
         highlight = "puntos_total"
-        fmts = {"puntos_total": "{:.2f}"}
 
     st.dataframe(
-        df_highlight(ranked[show_cols], highlight, formats=fmts),
+        df_highlight(ranked[show_cols], highlight),
         use_container_width=True
     )
 
@@ -641,8 +663,8 @@ show = valla[[
     "goles_recibidos_arquero","partidos_equivalentes","partidos_jugados",
     "puntos_total","puntos_arquero_ajustados"
 ]].copy()
-show["valla_promedio_2d"] = pd.to_numeric(show["valla_promedio_2d"], errors="coerce")
-st.dataframe(df_highlight(show, "valla_promedio_2d", formats={"valla_promedio_2d": "{:.2f}"}), use_container_width=True)
+
+st.dataframe(df_highlight(show, "valla_promedio_2d"), use_container_width=True)
 
 # =========================
 # 5) Resumen por fecha / promedio goles - SIN gráficas
@@ -698,7 +720,7 @@ reg["indice_regularidad"] = (
     0.35 * reg["score_rol"] +
     0.15 * reg["score_ofensivo"] +
     0.10 * reg["score_disciplina"]
-).round(4)
+)
 
 reg = reg.sort_values(
     by=["indice_regularidad","partidos_jugados","goles","asistencia_gol"],
@@ -708,10 +730,7 @@ reg = reg.sort_values(
 reg.insert(0, "posicion_ranking", range(1, len(reg) + 1))
 
 show = reg[["posicion_ranking","nombre","indice_regularidad","posicion","partidos_jugados","partidos_equivalentes","puntos_total","goles","asistencia_gol","amarillas","rojas"]].copy()
-st.dataframe(
-    df_highlight(show, "indice_regularidad", formats={"indice_regularidad": "{:.2f}", "partidos_equivalentes": "{:.2f}", "puntos_total": "{:.2f}"}),
-    use_container_width=True
-)
+st.dataframe(df_highlight(show, "indice_regularidad"), use_container_width=True)
 
 st.markdown("---")
 
@@ -774,7 +793,7 @@ with st.expander("📆 ¿Quieres ver los datos de una fecha diferente?", expande
                     st.info("Sin datos para esta posición ese día.")
                 else:
                     show = r[["posicion_ranking","nombre","puntos","partido_completado","goles","asistencia_gol","amarillas","rojas"]].copy()
-                    st.dataframe(df_highlight(show, "puntos", formats={"puntos": "{:.2f}", "partido_completado": "{:.2f}"}), use_container_width=True)
+                    st.dataframe(df_highlight(show, "puntos"), use_container_width=True)
 
         ver_acum = st.checkbox(f"Mostrar acumulados a esa fecha ({fsel})", value=True)
 
@@ -806,7 +825,7 @@ with st.expander("📆 ¿Quieres ver los datos de una fecha diferente?", expande
                 if pos == "arquero":
                     dfp["valla_2d"] = pd.to_numeric(dfp["valla_promedio"], errors="coerce").round(2)
                     show = dfp[["posicion_ranking","nombre","puntos_arquero_ajustados","puntos_total","valla_2d","partidos_jugados","goles","asistencia_gol"]].copy()
-                    st.dataframe(df_highlight(show, "puntos_arquero_ajustados", formats={"puntos_arquero_ajustados": "{:.2f}", "valla_2d": "{:.2f}"}), use_container_width=True)
+                    st.dataframe(df_highlight(show, "puntos_arquero_ajustados"), use_container_width=True)
                 else:
                     show = dfp[["posicion_ranking","nombre","puntos_total","partidos_jugados","goles","asistencia_gol"]].copy()
-                    st.dataframe(df_highlight(show, "puntos_total", formats={"puntos_total": "{:.2f}"}), use_container_width=True)
+                    st.dataframe(df_highlight(show, "puntos_total"), use_container_width=True)
