@@ -352,7 +352,14 @@ base["goles_recibidos_equipo"] = base.apply(goles_recibidos_equipo, axis=1)
 base["valla_invicta_equipo"] = (base["goles_recibidos_equipo"] == 0).astype(int)
 
 # Penalizaciones por partido (NO prorrateadas)
-base["penal_partido"] = (-1 * base["amarillas"]) + (-3 * base["rojas"])
+# base["penal_partido"] = (-1 * base["amarillas"]) + (-3 * base["rojas"])
+
+base["penal_partido"] = (
+    (-1 * base["amarillas"]) +
+    (-3 * base["rojas"]) +
+    (-1 * base["autogoles"])
+)
+
 
 def puntos_posicion(row):
     pos = str(row["posicion"]).strip().lower()
