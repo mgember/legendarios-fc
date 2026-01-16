@@ -213,8 +213,11 @@ if pd.notna(ultima_fecha):
         mz = int(last_match.iloc[0]["marcador_azul"]) if pd.notna(last_match.iloc[0]["marcador_azul"]) else 0
 
         a, b, c = st.columns(3)
-        a.metric("📅 Última fecha", str(ultima_fecha.date()))
-        b.metric("🆔 Partidos Jugados", last_id)
+        # a.metric("📅 Última fecha", str(ultima_fecha.date()))
+        # b.metric("🆔 Partidos Jugados", last_id)
+        
+        a.metric("🆔 Partidos Jugados", last_id)
+        b.metric("📅 Última fecha", str(ultima_fecha.date()))
         c.metric("⚽ Marcador", f"amarillo {ma} - {mz} azul")
 else:
     st.warning("No hay fechas válidas en la hoja Partidos.")
