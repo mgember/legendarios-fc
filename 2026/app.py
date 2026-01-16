@@ -214,7 +214,7 @@ if pd.notna(ultima_fecha):
 
         a, b, c = st.columns(3)
         a.metric("📅 Última fecha", str(ultima_fecha.date()))
-        b.metric("🆔 id_partido", last_id)
+        b.metric("🆔 Partidos Jugados", last_id)
         c.metric("⚽ Marcador", f"amarillo {ma} - {mz} azul")
 else:
     st.warning("No hay fechas válidas en la hoja Partidos.")
