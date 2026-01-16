@@ -585,6 +585,18 @@ for i, pos in enumerate(pos_list):
 # =========================
 # 3) Rankings generales año (solo 2 gráficas)
 # =========================
+# =========================
+# Separador visual: Última fecha vs Acumulados
+# =========================
+st.markdown("---")
+st.markdown(
+    "<div style='text-align:center; color:#6b7280; font-size:13px; margin:-6px 0 10px 0;'>"
+    "⬇️ A partir de aquí: estadísticas acumuladas del año ⬇️"
+    "</div>",
+    unsafe_allow_html=True
+)
+
+
 st.markdown("## 📊 Rankings generales (año)")
 
 c1, c2 = st.columns(2)
