@@ -198,6 +198,42 @@ base = (
     .merge(partidos_df, on="id_partido", how="left", suffixes=("", "_partido"))
 )
 
+def acumulados_hasta_fecha(base_df, fecha_limite):
+    df = base_df[base_df["fecha"].dt.date <= fecha_limite].copy()
+
+    agg_f = df.groupby(["id_jugador","nombre","posicion","activo","sancion_grave"], as_index=False).agg(
+        puntos_partido_total=("puntos_partido","sum"),
+        partidos_jugados=("id_partido","nunique"),
+        partidos_equivalentes=("partido_completado","sum"),
+        goles=("gol_total","sum"),
+        asistencia_gol=("asistencia_gol","sum"),
+        autogoles=("autogoles","sum"),
+        amarillas=("amarillas","sum"),
+        rojas=("rojas","sum"),
+        penales_atajados=("penal_atajado","sum"),
+        goles_recibidos_arquero=("gol_recibido","sum"),
+    )
+
+    agg_f["penal_umbral_amarillas"] = (-3) * (agg_f["amarillas"] // 5)
+    agg_f["penal_umbral_rojas"] = (-5) * (agg_f["rojas"] // 3)
+
+    agg_f["puntos_total"] = agg_f["puntos_partido_total"] + agg_f["penal_umbral_amarillas"] + agg_f["penal_umbral_rojas"]
+    agg_f.loc[agg_f["sancion_grave"] == 1, "puntos_total"] = 0
+
+    mask_arq = (agg_f["posicion"] == "arquero") & (agg_f["partidos_equivalentes"] > 0)
+    agg_f["valla_promedio"] = pd.Series([float("nan")] * len(agg_f), dtype="float64")
+    agg_f.loc[mask_arq, "valla_promedio"] = (
+        agg_f.loc[mask_arq, "goles_recibidos_arquero"] / agg_f.loc[mask_arq, "partidos_equivalentes"]
+    )
+
+    agg_f["puntos_arquero_ajustados"] = agg_f["puntos_total"].astype(float)
+    agg_f.loc[mask_arq, "puntos_arquero_ajustados"] = (
+        agg_f.loc[mask_arq, "puntos_total"].astype(float) - agg_f.loc[mask_arq, "valla_promedio"]
+    )
+
+    return agg_f
+
+
 base["activo"] = pd.to_numeric(base["activo"], errors="coerce").fillna(0).astype(int)
 base["sancion_grave"] = pd.to_numeric(base["sancion_grave"], errors="coerce").fillna(0).astype(int)
 
@@ -632,3 +668,128 @@ ax.bar(reg["nombre"], reg["indice_regularidad"])
 ax.set_title("Índice de regularidad (mayor es mejor)")
 ax.tick_params(axis='x', rotation=90)
 st.pyplot(fig)
+
+st.markdown("---")
+
+with st.expander("📆 ¿Quieres ver los datos de una fecha diferente?", expanded=False):
+
+    # Lista de partidos disponibles (más reciente primero)
+    part_sel = partidos_df.dropna(subset=["id_partido", "fecha"]).copy()
+    part_sel = part_sel.sort_values(["fecha", "id_partido"], ascending=[False, False])
+
+    part_sel["label"] = part_sel.apply(
+        lambda r: f"Partido {int(r['id_partido'])} | {r['fecha'].date()} | {str(r.get('cancha',''))}",
+        axis=1
+    )
+
+    opcion = st.selectbox(
+        "Selecciona un partido",
+        ["(Selecciona uno)"] + part_sel["label"].tolist(),
+        index=0
+    )
+
+    if opcion == "(Selecciona uno)":
+        st.info("Selecciona un partido y aquí verás el resumen y los rankings de esa fecha.")
+    else:
+        row = part_sel.loc[part_sel["label"] == opcion].iloc[0]
+        pid = int(row["id_partido"])
+        fsel = pd.to_datetime(row["fecha"]).date()
+        cancha_val = str(row.get("cancha","—")) if pd.notna(row.get("cancha", None)) else "—"
+        ma = int(row["marcador_amarillo"]) if pd.notna(row["marcador_amarillo"]) else 0
+        mz = int(row["marcador_azul"]) if pd.notna(row["marcador_azul"]) else 0
+
+        # Panel gris
+        st.markdown("<div class='kpi-box'>", unsafe_allow_html=True)
+
+        a, b, c, d = st.columns(4)
+        a.metric("🆔 Partido Jugado", pid)
+        b.metric("📅 Última fecha", str(fsel))
+        c.metric("📍 Cancha", cancha_val)
+
+        marcador_html = f"""
+        <div style="font-size:18px; font-weight:600;">
+            <span style="color:#f1c40f;">🟡 AMARILLO {ma}</span>
+            &nbsp; - &nbsp;
+            <span style="color:#3498db;">🔵 AZUL {mz}</span>
+        </div>
+        """
+        d.markdown("⚽ **Marcador**", unsafe_allow_html=True)
+        d.markdown(marcador_html, unsafe_allow_html=True)
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+        # Rankings SOLO DEL DÍA
+        st.markdown(f"### 🧾 Rankings del día – {fsel}")
+
+        base_dia = base[(base["id_partido"] == pid) & (base["activo"] == 1)].copy()
+
+        def ranking_dia_por_pos(pos):
+            dfp = base_dia[base_dia["posicion"] == pos].copy()
+            if pos == "defensa":
+                dfp = dfp[dfp["fue_delantero"] == 0].copy()
+            if dfp.empty:
+                return dfp
+
+            r = dfp.groupby(["id_jugador","nombre"], as_index=False).agg(
+                puntos=("puntos_partido","sum"),
+                partido_completado=("partido_completado","sum"),
+                goles=("gol_total","sum"),
+                asistencia_gol=("asistencia_gol","sum"),
+                amarillas=("amarillas","sum"),
+                rojas=("rojas","sum"),
+            )
+
+            r["puntos"] = pd.to_numeric(r["puntos"], errors="coerce").fillna(0.0).astype(float)
+
+            r = r.sort_values(
+                by=["puntos","partido_completado","goles","asistencia_gol"],
+                ascending=[False, False, False, False]
+            ).reset_index(drop=True)
+
+            r.insert(0, "posicion_ranking", range(1, len(r) + 1))
+            return r
+
+        pos_list = ["arquero","defensa","mediocampista","delantero"]
+        cols = st.columns(2)
+        for i, pos in enumerate(pos_list):
+            with cols[i % 2]:
+                st.subheader(pos.capitalize())
+                r = ranking_dia_por_pos(pos)
+                if r.empty:
+                    st.info("Sin datos para esta posición ese día.")
+                else:
+                    st.dataframe(r, use_container_width=True)
+
+        # Acumulados a esa fecha
+        ver_acum = st.checkbox(f"Mostrar acumulados a esa fecha ({fsel})", value=True)
+
+        if ver_acum:
+            st.markdown(f"### 🏆 Acumulados a esa fecha – {fsel}")
+
+            agg_h = acumulados_hasta_fecha(base, fsel)
+            agg_h = agg_h[agg_h["activo"] == 1].copy()
+
+            for pos in ["arquero","defensa","mediocampista","delantero"]:
+                st.subheader(pos.capitalize())
+                dfp = agg_h[agg_h["posicion"] == pos].copy()
+                if dfp.empty:
+                    st.info("Sin datos.")
+                    continue
+
+                if pos == "arquero":
+                    dfp["_p"] = pd.to_numeric(dfp["puntos_arquero_ajustados"], errors="coerce").fillna(0.0)
+                else:
+                    dfp["_p"] = pd.to_numeric(dfp["puntos_total"], errors="coerce").fillna(0.0)
+
+                dfp = dfp.sort_values(
+                    by=["_p","partidos_jugados","goles","asistencia_gol"],
+                    ascending=[False, False, False, False]
+                ).reset_index(drop=True)
+
+                dfp.insert(0, "posicion_ranking", range(1, len(dfp) + 1))
+
+                if pos == "arquero":
+                    dfp["valla_2d"] = pd.to_numeric(dfp["valla_promedio"], errors="coerce").round(2)
+                    st.dataframe(dfp[["posicion_ranking","nombre","puntos_total","valla_2d","puntos_arquero_ajustados","partidos_jugados","goles","asistencia_gol"]], use_container_width=True)
+                else:
+                    st.dataframe(dfp[["posicion_ranking","nombre","puntos_total","partidos_jugados","goles","asistencia_gol"]], use_container_width=True)
