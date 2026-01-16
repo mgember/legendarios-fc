@@ -367,6 +367,11 @@ st.markdown(f"## 🧾 Ranking por posición de la última fecha – {ultima_fech
 
 def ranking_ultima_fecha_por_pos(pos):
     dfp = base_ultima_fecha[base_ultima_fecha["posicion"] == pos].copy()
+
+    # ✅ NUEVO: si es ranking de defensas de la última fecha,
+    # excluimos a los que jugaron de delantero (fue_delantero=1)
+    if pos == "defensa":
+        dfp = dfp[dfp["fue_delantero"] == 0].copy()
     if dfp.empty:
         return dfp
 
