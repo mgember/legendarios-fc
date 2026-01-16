@@ -4,6 +4,9 @@ import matplotlib.pyplot as plt
 from datetime import datetime
 from PIL import Image
 
+pd.set_option("display.precision", 2)
+pd.set_option("display.float_format", lambda x: f"{x:.2f}")
+
 # =========================
 # Configuración Streamlit
 # =========================
