@@ -212,13 +212,31 @@ if pd.notna(ultima_fecha):
         ma = int(last_match.iloc[0]["marcador_amarillo"]) if pd.notna(last_match.iloc[0]["marcador_amarillo"]) else 0
         mz = int(last_match.iloc[0]["marcador_azul"]) if pd.notna(last_match.iloc[0]["marcador_azul"]) else 0
 
-        a, b, c = st.columns(3)
+        # a, b, c = st.columns(3)
         # a.metric("📅 Última fecha", str(ultima_fecha.date()))
         # b.metric("🆔 Partidos Jugados", last_id)
         
-        a.metric("🆔 Partidos Jugados", last_id)
+        # a.metric("🆔 Partidos Jugados", last_id)
+        # b.metric("📅 Última fecha", str(ultima_fecha.date()))
+        # c.metric("⚽ Marcador", f"amarillo {ma} - {mz} azul")
+
+        a, b, c, d = st.columns(4)
+
+        a.metric("🆔 Partido Jugado", last_id)
         b.metric("📅 Última fecha", str(ultima_fecha.date()))
-        c.metric("⚽ Marcador", f"amarillo {ma} - {mz} azul")
+        c.metric("📍 Cancha", last_match.iloc[0]["cancha"])
+
+        marcador_html = f"""
+        <div style="font-size:18px; font-weight:600;">
+            <span style="color:#f1c40f;">🟡 AMARILLO {ma}</span>
+            &nbsp; - &nbsp;
+            <span style="color:#3498db;">🔵 AZUL {mz}</span>
+        </div>
+        """
+
+        d.markdown("⚽ **Marcador**", unsafe_allow_html=True)
+        d.markdown(marcador_html, unsafe_allow_html=True)
+
 else:
     st.warning("No hay fechas válidas en la hoja Partidos.")
     st.stop()
