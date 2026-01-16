@@ -638,6 +638,7 @@ show = valla[[
     "goles_recibidos_arquero","partidos_equivalentes","partidos_jugados",
     "puntos_total","puntos_arquero_ajustados"
 ]].copy()
+show["valla_promedio_2d"] = pd.to_numeric(show["valla_promedio_2d"], errors="coerce")
 st.dataframe(df_highlight(show, "valla_promedio_2d", formats={"valla_promedio_2d": "{:.2f}"}), use_container_width=True)
 
 # =========================
@@ -704,7 +705,10 @@ reg = reg.sort_values(
 reg.insert(0, "posicion_ranking", range(1, len(reg) + 1))
 
 show = reg[["posicion_ranking","nombre","indice_regularidad","posicion","partidos_jugados","partidos_equivalentes","puntos_total","goles","asistencia_gol","amarillas","rojas"]].copy()
-st.dataframe(df_highlight(show, "indice_regularidad", formats={"indice_regularidad": "{:.4f}"}), use_container_width=True)
+st.dataframe(
+    df_highlight(show, "indice_regularidad", formats={"indice_regularidad": "{:.2f}", "partidos_equivalentes": "{:.2f}", "puntos_total": "{:.2f}"}),
+    use_container_width=True
+)
 
 st.markdown("---")
 
