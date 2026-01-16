@@ -15,7 +15,7 @@ st.set_page_config(page_title="Estadísticas Legendarios FC 2026", layout="wide"
 col1, col2, col3 = st.columns([1, 2, 1])
 with col2:
     try:
-        logo = Image.open("2026/logo.png")  # <-- importante: ruta con carpeta
+        logo = Image.open("2026/logo.png")
         st.image(logo, width=120)
     except Exception:
         pass
@@ -31,13 +31,13 @@ st.markdown(
 # =========================
 # Acceso
 # =========================
-CLAVE = "LEGENDARIOS2026"  # cámbiala si quieres
+CLAVE = "LEGENDARIOS2026"
 clave_usuario = st.text_input("🔐 Ingresa tu código de acceso", type="password")
 if clave_usuario != CLAVE:
     st.warning("⚠️ Ingresa el código correcto para ver las estadísticas.")
     st.stop()
 
-# Botón para evitar "reboot" por cache
+# Botón para cache
 if st.button("🔄 Recargar datos (limpiar cache)"):
     st.cache_data.clear()
     st.rerun()
@@ -74,10 +74,10 @@ except Exception as e:
 # =========================
 partidos_df["fecha"] = pd.to_datetime(partidos_df["fecha"], errors="coerce")
 jugadores_df["posicion"] = jugadores_df["posicion"].astype(str).str.strip().str.lower()
-eventos_df.columns = [c.strip() for c in eventos_df.columns]  # por si acaso
+eventos_df.columns = [c.strip() for c in eventos_df.columns]
 
 # =========================
-# Validaciones robustas (sin romper por NaN)
+# Validaciones robustas
 # =========================
 def validate(jugadores, partidos, eventos):
     errors = []
@@ -94,11 +94,9 @@ def validate(jugadores, partidos, eventos):
     if not req_e.issubset(set(eventos.columns)):
         errors.append(f"Hoja Eventos: faltan columnas: {sorted(list(req_e - set(eventos.columns)))}")
 
-    # Eventos puede estar vacío al inicio
     if len(eventos) == 0:
         return errors
 
-    # Normalizar ids para validación
     ev = eventos.copy()
     ev["id_partido"] = pd.to_numeric(ev["id_partido"], errors="coerce")
     ev["id_jugador"] = pd.to_numeric(ev["id_jugador"], errors="coerce")
@@ -109,29 +107,23 @@ def validate(jugadores, partidos, eventos):
     ids_j = set(pd.to_numeric(jugadores["id_jugador"], errors="coerce").dropna().astype(int).tolist())
     ids_p = set(pd.to_numeric(partidos["id_partido"], errors="coerce").dropna().astype(int).tolist())
 
-    bad_j = ev[~ev["id_jugador"].isin(ids_j)]
-    if len(bad_j) > 0:
+    if (ev["id_jugador"].isin(ids_j) == False).any():
         errors.append("Eventos: hay id_jugador que no existen en Jugadores (revisa filas).")
 
-    bad_p = ev[~ev["id_partido"].isin(ids_p)]
-    if len(bad_p) > 0:
+    if (ev["id_partido"].isin(ids_p) == False).any():
         errors.append("Eventos: hay id_partido que no existen en Partidos (revisa filas).")
 
-    # equipo válido
-    if "equipo" in eventos.columns:
-        bad_team = eventos[~eventos["equipo"].astype(str).str.strip().str.lower().isin(EQUIPOS_VALIDOS)]
-        if len(bad_team) > 0:
-            errors.append("Eventos: hay valores en 'equipo' distintos a 'amarillo'/'azul' (en minúscula).")
+    bad_team = eventos[~eventos["equipo"].astype(str).str.strip().str.lower().isin(EQUIPOS_VALIDOS)]
+    if len(bad_team) > 0:
+        errors.append("Eventos: hay valores en 'equipo' distintos a 'amarillo'/'azul' (en minúscula).")
 
-    # posición válida
     bad_pos = jugadores[~jugadores["posicion"].astype(str).str.strip().str.lower().isin(POS_VALIDAS)]
     if len(bad_pos) > 0:
         errors.append("Jugadores: hay valores en 'posicion' fuera de: arquero/defensa/mediocampista/delantero (minúscula).")
 
-    # unicidad jugador-partido
     dup = eventos.duplicated(subset=["id_partido", "id_jugador"]).sum()
     if dup > 0:
-        errors.append(f"Eventos: hay {dup} registros duplicados (id_partido + id_jugador). Debe ser 1 fila por jugador por partido.")
+        errors.append(f"Eventos: hay {dup} duplicados (id_partido + id_jugador). Debe ser 1 fila por jugador por partido.")
 
     return errors
 
@@ -151,7 +143,6 @@ if len(eventos_df) == 0:
 # =========================
 # Preparación de Eventos (tipos)
 # =========================
-# equipo en minúscula
 eventos_df["equipo"] = eventos_df["equipo"].astype(str).str.strip().str.lower()
 
 # Recalcular gol_total
@@ -159,16 +150,34 @@ eventos_df["gol_primer"] = pd.to_numeric(eventos_df["gol_primer"], errors="coerc
 eventos_df["gol_segundo"] = pd.to_numeric(eventos_df["gol_segundo"], errors="coerce").fillna(0).astype(int)
 eventos_df["gol_total"] = (eventos_df["gol_primer"] + eventos_df["gol_segundo"]).astype(int)
 
-# columnas numéricas (enteras)
+# Enteros
 int_cols = ["gol_recibido","fue_delantero","autogoles","asistencia_gol","amarillas","rojas","penal_atajado"]
 for c in int_cols:
+    # blindaje contra "1 " / "1,0"
+    eventos_df[c] = (
+        eventos_df[c].astype(str)
+        .str.replace(",", ".", regex=False)
+        .str.strip()
+    )
     eventos_df[c] = pd.to_numeric(eventos_df[c], errors="coerce").fillna(0).astype(int)
 
-# fraccion_partido para TODOS (float)
-if "fraccion_partido" not in eventos_df.columns:
-    eventos_df["fraccion_partido"] = 1.0
+# partido_completado (float) - compatibilidad con fraccion_partido
+if "partido_completado" in eventos_df.columns:
+    col_pc = "partido_completado"
+elif "fraccion_partido" in eventos_df.columns:
+    col_pc = "fraccion_partido"
 else:
-    eventos_df["fraccion_partido"] = pd.to_numeric(eventos_df["fraccion_partido"], errors="coerce").fillna(1.0).astype(float)
+    col_pc = None
+
+if col_pc is None:
+    eventos_df["partido_completado"] = 1.0
+else:
+    eventos_df["partido_completado"] = (
+        eventos_df[col_pc].astype(str)
+        .str.replace(",", ".", regex=False)
+        .str.strip()
+    )
+    eventos_df["partido_completado"] = pd.to_numeric(eventos_df["partido_completado"], errors="coerce").fillna(1.0).astype(float)
 
 # ids
 eventos_df["id_partido"] = pd.to_numeric(eventos_df["id_partido"], errors="coerce")
@@ -193,14 +202,30 @@ base["activo"] = pd.to_numeric(base["activo"], errors="coerce").fillna(0).astype
 base["sancion_grave"] = pd.to_numeric(base["sancion_grave"], errors="coerce").fillna(0).astype(int)
 
 # =========================
+# Cuadro resumen: última fecha jugada
+# =========================
+ultima_fecha = partidos_df["fecha"].dropna().max()
+if pd.notna(ultima_fecha):
+    last_match = partidos_df.loc[partidos_df["fecha"] == ultima_fecha].sort_values("id_partido", ascending=False).head(1)
+    if not last_match.empty:
+        last_id = int(last_match.iloc[0]["id_partido"])
+        ma = int(last_match.iloc[0]["marcador_amarillo"]) if pd.notna(last_match.iloc[0]["marcador_amarillo"]) else 0
+        mz = int(last_match.iloc[0]["marcador_azul"]) if pd.notna(last_match.iloc[0]["marcador_azul"]) else 0
+
+        a, b, c = st.columns(3)
+        a.metric("📅 Última fecha", str(ultima_fecha.date()))
+        b.metric("🆔 id_partido", last_id)
+        c.metric("⚽ Marcador", f"amarillo {ma} - {mz} azul")
+else:
+    st.warning("No hay fechas válidas en la hoja Partidos.")
+    st.stop()
+
+# =========================
 # Utilidades de cálculo
 # =========================
 def resultado_puntos(row):
     eq = row["equipo"]
-    if eq == "amarillo":
-        r = str(row["resultado_amarillo"]).strip().lower()
-    else:
-        r = str(row["resultado_azul"]).strip().lower()
+    r = str(row["resultado_amarillo"]).strip().lower() if eq == "amarillo" else str(row["resultado_azul"]).strip().lower()
     if r == "g":
         return 3
     if r == "e":
@@ -208,7 +233,6 @@ def resultado_puntos(row):
     return 0
 
 def goles_recibidos_equipo(row):
-    # marcador del rival
     if row["equipo"] == "amarillo":
         return int(row["marcador_azul"]) if pd.notna(row["marcador_azul"]) else 0
     else:
@@ -218,7 +242,7 @@ base["puntos_resultado"] = base.apply(resultado_puntos, axis=1)
 base["goles_recibidos_equipo"] = base.apply(goles_recibidos_equipo, axis=1)
 base["valla_invicta_equipo"] = (base["goles_recibidos_equipo"] == 0).astype(int)
 
-# Penalizaciones por partido (NO se prorratean)
+# Penalizaciones por partido (NO prorrateadas)
 base["penal_partido"] = (-1 * base["amarillas"]) + (-3 * base["rojas"])
 
 def puntos_posicion(row):
@@ -238,9 +262,12 @@ def puntos_posicion(row):
         puntos += 1 * asis
 
     elif pos == "defensa":
+        # NUEVA REGLA:
+        # Si fue_delantero=1 => SOLO puntaje por resultado (posicion aporta 0 puntos)
+        if fue_del == 1:
+            return 0
         puntos += 3 * valla
-        if fue_del == 0:
-            puntos += 3 * goles
+        puntos += 3 * goles
         puntos += 1 * asis
         if goles >= 3:
             puntos += 1
@@ -260,11 +287,11 @@ def puntos_posicion(row):
 base["puntos_posicion"] = base.apply(puntos_posicion, axis=1)
 
 # =========================
-# Puntos por partido (con fracción para TODOS)
-# - Se prorratea: puntos_resultado + puntos_posicion
-# - NO se prorratea: penal_partido
+# Puntos por partido (con partido_completado para TODOS)
+# - prorratea: (resultado + posicion)
+# - NO prorratea: tarjetas
 # =========================
-base["puntos_participacion"] = (base["puntos_resultado"] + base["puntos_posicion"]) * base["fraccion_partido"]
+base["puntos_participacion"] = (base["puntos_resultado"] + base["puntos_posicion"]) * base["partido_completado"]
 base["puntos_partido"] = base["puntos_participacion"] + base["penal_partido"]
 
 # =========================
@@ -273,30 +300,27 @@ base["puntos_partido"] = base["puntos_participacion"] + base["penal_partido"]
 agg = base.groupby(["id_jugador","nombre","posicion","activo","sancion_grave"], as_index=False).agg(
     puntos_partido_total=("puntos_partido","sum"),
     partidos_jugados=("id_partido","nunique"),
-    partidos_equivalentes=("fraccion_partido","sum"),
+    partidos_equivalentes=("partido_completado","sum"),
     goles=("gol_total","sum"),
     asistencia_gol=("asistencia_gol","sum"),
     autogoles=("autogoles","sum"),
     amarillas=("amarillas","sum"),
     rojas=("rojas","sum"),
     penales_atajados=("penal_atajado","sum"),
-    goles_recibidos_total=("goles_recibidos_equipo","sum"),   # equipo (se deja por si lo quieres)
-    goles_recibidos_arquero=("gol_recibido","sum"),          # arquero (Opción 2)
+    goles_recibidos_arquero=("gol_recibido","sum"),
 )
 
-# Penalización por umbrales reiniciables
+# Penalización umbrales reiniciables
 agg["penal_umbral_amarillas"] = (-3) * (agg["amarillas"] // 5)
 agg["penal_umbral_rojas"] = (-5) * (agg["rojas"] // 3)
 
-# Total final año (umbral extra se suma aquí; lo por partido ya estaba)
 agg["puntos_total"] = agg["puntos_partido_total"] + agg["penal_umbral_amarillas"] + agg["penal_umbral_rojas"]
-
-# Sanción grave: borra TODOS los puntos (temporada)
 agg.loc[agg["sancion_grave"] == 1, "puntos_total"] = 0
 
 # =========================
-# Valla menos vencida (Opción 2) y puntos arquero ajustados
-# valla_promedio = goles_recibidos_arquero / partidos_equivalentes
+# Valla menos vencida (Opción 2): usa gol_recibido / partidos_equivalentes
+# - cálculo con decimales completos
+# - visualización a 2 decimales
 # =========================
 mask_arq = (agg["posicion"] == "arquero") & (agg["partidos_equivalentes"] > 0)
 
@@ -304,43 +328,38 @@ agg["valla_promedio"] = pd.Series([float("nan")] * len(agg), dtype="float64")
 agg.loc[mask_arq, "valla_promedio"] = (
     agg.loc[mask_arq, "goles_recibidos_arquero"] / agg.loc[mask_arq, "partidos_equivalentes"]
 )
-agg["valla_promedio"] = pd.to_numeric(agg["valla_promedio"], errors="coerce").round(3)
 
 agg["puntos_arquero_ajustados"] = agg["puntos_total"].astype(float)
 agg.loc[mask_arq, "puntos_arquero_ajustados"] = (
-    (agg.loc[mask_arq, "puntos_total"].astype(float) - agg.loc[mask_arq, "valla_promedio"]).round(3)
+    agg.loc[mask_arq, "puntos_total"].astype(float) - agg.loc[mask_arq, "valla_promedio"]
 )
 
 # =========================
-# Ranking con desempate
+# Ranking con desempate:
 # 1) puntos
-# 2) partidos_jugados
+# 2) partidos_jugados (asistencia)
 # 3) goles
 # 4) asistencia_gol
 # =========================
 def rank_puntos(df_in, use_arquero_ajustado=False):
     df = df_in.copy()
     df["_p"] = df["puntos_arquero_ajustados"] if use_arquero_ajustado else df["puntos_total"]
+    df["_p"] = pd.to_numeric(df["_p"], errors="coerce").fillna(0.0).astype(float)
+
     df = df.sort_values(
         by=["_p","partidos_jugados","goles","asistencia_gol"],
         ascending=[False, False, False, False]
     ).reset_index(drop=True)
+
     df.insert(0, "posicion_ranking", range(1, len(df) + 1))
     return df.drop(columns=["_p"])
 
-# Solo activos para premiaciones/rankings
 agg_activos = agg[agg["activo"] == 1].copy()
 
 # =========================
-# 1) RANKING POR POSICIÓN - ÚLTIMA FECHA (NO acumulado)
+# 1) Ranking por posición - ÚLTIMA FECHA
 # =========================
-ultima_fecha = partidos_df["fecha"].dropna().max()
-if pd.isna(ultima_fecha):
-    st.warning("No hay fechas válidas en Partidos.")
-    st.stop()
-
 base_ultima_fecha = base[(base["fecha"].dt.date == ultima_fecha.date()) & (base["activo"] == 1)].copy()
-
 st.markdown(f"## 🧾 Ranking por posición de la última fecha – {ultima_fecha.date()}")
 
 def ranking_ultima_fecha_por_pos(pos):
@@ -350,15 +369,18 @@ def ranking_ultima_fecha_por_pos(pos):
 
     r = dfp.groupby(["id_jugador","nombre"], as_index=False).agg(
         puntos=("puntos_partido","sum"),
-        fraccion_total=("fraccion_partido","sum"),
+        partido_completado=("partido_completado","sum"),
         goles=("gol_total","sum"),
         asistencia_gol=("asistencia_gol","sum"),
         amarillas=("amarillas","sum"),
         rojas=("rojas","sum"),
     )
 
+    r["puntos"] = pd.to_numeric(r["puntos"], errors="coerce").fillna(0.0).astype(float)
+
+    # desempate: puntos -> partido_completado -> goles -> asistencias
     r = r.sort_values(
-        by=["puntos","fraccion_total","goles","asistencia_gol"],
+        by=["puntos","partido_completado","goles","asistencia_gol"],
         ascending=[False, False, False, False]
     ).reset_index(drop=True)
 
@@ -383,7 +405,7 @@ for i, pos in enumerate(pos_list):
             st.pyplot(fig)
 
 # =========================
-# 2) RANKING ACUMULADO AÑO - POR POSICIÓN
+# 2) Ranking acumulado año - por posición
 # =========================
 st.markdown("## 🏆 Ranking acumulado por puntos (año) - por posición")
 
@@ -396,13 +418,19 @@ def show_rank_acum(pos):
     if pos == "arquero":
         ranked = rank_puntos(dfp, use_arquero_ajustado=True)
         st.caption("Nota: Arqueros usan Puntos Ajustados = Puntos Totales - Valla (goles_recibidos_arquero/partidos_equivalentes).")
-        show_cols = ["posicion_ranking","nombre","puntos_total","valla_promedio","puntos_arquero_ajustados","partidos_jugados","partidos_equivalentes","goles","asistencia_gol","amarillas","rojas"]
+        show_cols = [
+            "posicion_ranking","nombre",
+            "puntos_total","valla_promedio","puntos_arquero_ajustados",
+            "partidos_jugados","partidos_equivalentes","goles","asistencia_gol","amarillas","rojas"
+        ]
         ycol = "puntos_arquero_ajustados"
     else:
         ranked = rank_puntos(dfp, use_arquero_ajustado=False)
         show_cols = ["posicion_ranking","nombre","puntos_total","partidos_jugados","partidos_equivalentes","goles","asistencia_gol","amarillas","rojas"]
         ycol = "puntos_total"
 
+    # asegurar numérico para gráfico
+    ranked[ycol] = pd.to_numeric(ranked[ycol], errors="coerce").fillna(0.0).astype(float)
     st.dataframe(ranked[show_cols], use_container_width=True)
 
     fig, ax = plt.subplots()
@@ -419,7 +447,7 @@ for i, pos in enumerate(pos_list):
         show_rank_acum(pos)
 
 # =========================
-# 3) Rankings generales año: goles, asistencias, tarjetas, autogoles
+# 3) Rankings generales año
 # =========================
 st.markdown("## 📊 Rankings generales (año)")
 
@@ -472,35 +500,37 @@ ag.insert(0, "posicion_ranking", range(1, len(ag) + 1))
 st.dataframe(ag[["posicion_ranking","nombre","autogoles","partidos_jugados","partidos_equivalentes"]], use_container_width=True)
 
 # =========================
-# 4) Valla menos vencida
+# 4) Valla menos vencida (mostrar 2 decimales)
 # =========================
 st.markdown("## 🧤 Ranking valla menos vencida (goles_recibidos_arquero / partidos_equivalentes)")
 
 valla = agg_activos[agg_activos["posicion"] == "arquero"].copy()
 valla = valla[valla["partidos_equivalentes"] > 0].copy()
-valla = valla.sort_values(by=["valla_promedio","partidos_equivalentes"], ascending=[True, False]).reset_index(drop=True)
+valla["valla_promedio_num"] = pd.to_numeric(valla["valla_promedio"], errors="coerce").fillna(0.0).astype(float)
+valla["valla_promedio_2d"] = valla["valla_promedio_num"].round(2)
+
+valla = valla.sort_values(by=["valla_promedio_num","partidos_equivalentes"], ascending=[True, False]).reset_index(drop=True)
 valla.insert(0, "posicion_ranking", range(1, len(valla) + 1))
 
 st.dataframe(
-    valla[["posicion_ranking","nombre","valla_promedio","goles_recibidos_arquero","partidos_equivalentes","partidos_jugados","puntos_total","puntos_arquero_ajustados"]],
+    valla[["posicion_ranking","nombre","valla_promedio_2d","goles_recibidos_arquero","partidos_equivalentes","partidos_jugados","puntos_total","puntos_arquero_ajustados"]],
     use_container_width=True
 )
 
-if not valla.empty:
-    fig, ax = plt.subplots()
-    ax.bar(valla["nombre"], valla["valla_promedio"])
-    ax.set_title("Promedio de goles recibidos (menor es mejor)")
-    ax.tick_params(axis='x', rotation=90)
-    st.pyplot(fig)
+fig, ax = plt.subplots()
+ax.bar(valla["nombre"], valla["valla_promedio_num"])
+ax.set_title("Promedio de goles recibidos (menor es mejor)")
+ax.tick_params(axis='x', rotation=90)
+st.pyplot(fig)
 
 # =========================
-# 5) Resumen de goles por fecha, acumulado por equipo, promedio
+# 5) Resumen por fecha / promedio goles
 # =========================
 st.markdown("## 📅 Resumen de goles por fecha (amarillo vs azul)")
 
 resumen = partidos_df.copy().dropna(subset=["fecha"]).sort_values("fecha", ascending=False)
 resumen["goles_total_partido"] = resumen["marcador_amarillo"].fillna(0).astype(int) + resumen["marcador_azul"].fillna(0).astype(int)
-st.dataframe(resumen[["fecha","marcador_amarillo","marcador_azul","goles_total_partido"]], use_container_width=True)
+st.dataframe(resumen[["fecha","id_partido","marcador_amarillo","marcador_azul","goles_total_partido"]], use_container_width=True)
 
 fig, ax = plt.subplots()
 ax.plot(resumen["fecha"], resumen["marcador_amarillo"], marker="o", label="amarillo")
@@ -524,33 +554,29 @@ prom_total = round((total_goles_amarillo + total_goles_azul) / total_partidos, 2
 c3.metric("⚽ Promedio total goles/partido", prom_total)
 
 # =========================
-# 6) Jugador más regular (Índice)
+# 6) Jugador más regular
 # =========================
 st.markdown("## 🧠 Ranking jugador más regular (Índice de Regularidad)")
 
 reg = agg_activos.copy()
 
-# Asistencia: usamos partidos_equivalentes (más justo si hay medias asistencias)
 max_part_eq = reg["partidos_equivalentes"].max() if len(reg) else 1
 reg["score_asistencia"] = (reg["partidos_equivalentes"] / max_part_eq) if max_part_eq else 0
 
-# Rendimiento por rol: percentil dentro de posición (arquero usa ajustado)
 reg["score_rol"] = 0.0
 for pos in POS_VALIDAS:
     sub = reg[reg["posicion"] == pos].copy()
     if sub.empty:
         continue
     if pos == "arquero":
-        s = sub["puntos_arquero_ajustados"].rank(pct=True)
+        s = pd.to_numeric(sub["puntos_arquero_ajustados"], errors="coerce").fillna(0.0).astype(float).rank(pct=True)
     else:
-        s = sub["puntos_total"].rank(pct=True)
+        s = pd.to_numeric(sub["puntos_total"], errors="coerce").fillna(0.0).astype(float).rank(pct=True)
     reg.loc[reg["posicion"] == pos, "score_rol"] = s.values
 
-# Aporte ofensivo global
 reg["ofensivo"] = reg["goles"] + reg["asistencia_gol"]
 reg["score_ofensivo"] = reg["ofensivo"].rank(pct=True) if len(reg) else 0
 
-# Disciplina (castigo): más castigo => peor
 reg["castigo_disciplina"] = (reg["amarillas"] * 1) + (reg["rojas"] * 3) + ((reg["amarillas"] // 5) * 3) + ((reg["rojas"] // 3) * 5)
 disc_pct = reg["castigo_disciplina"].rank(pct=True) if len(reg) else 0
 reg["score_disciplina"] = 1 - disc_pct
@@ -562,7 +588,12 @@ reg["indice_regularidad"] = (
     0.10 * reg["score_disciplina"]
 ).round(4)
 
-reg = reg.sort_values(by=["indice_regularidad","partidos_equivalentes","goles","asistencia_gol"], ascending=[False, False, False, False]).reset_index(drop=True)
+# desempate: índice -> partidos_jugados -> goles -> asistencias
+reg = reg.sort_values(
+    by=["indice_regularidad","partidos_jugados","goles","asistencia_gol"],
+    ascending=[False, False, False, False]
+).reset_index(drop=True)
+
 reg.insert(0, "posicion_ranking", range(1, len(reg) + 1))
 
 st.dataframe(
