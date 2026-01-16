@@ -10,6 +10,33 @@ from PIL import Image
 st.set_page_config(page_title="Estadísticas Legendarios FC 2026", layout="wide")
 
 # =========================
+# Estilos (panel gris + resaltado)
+# =========================
+st.markdown("""
+<style>
+.kpi-box {
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  padding: 14px 14px 10px 14px;
+  border-radius: 12px;
+  margin: 10px 0 18px 0;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# Helper de estilo para resaltar una columna
+def df_highlight(df: pd.DataFrame, highlight_col: str, formats: dict | None = None):
+    sty = df.style
+    if formats:
+        sty = sty.format(formats)
+    if highlight_col in df.columns:
+        sty = sty.set_properties(
+            subset=[highlight_col],
+            **{"font-weight": "bold", "font-size": "120%"}
+        )
+    return sty
+
+# =========================
 # Encabezado
 # =========================
 col1, col2, col3 = st.columns([1, 2, 1])
@@ -248,14 +275,6 @@ if pd.notna(ultima_fecha):
         ma = int(last_match.iloc[0]["marcador_amarillo"]) if pd.notna(last_match.iloc[0]["marcador_amarillo"]) else 0
         mz = int(last_match.iloc[0]["marcador_azul"]) if pd.notna(last_match.iloc[0]["marcador_azul"]) else 0
 
-        # a, b, c = st.columns(3)
-        # a.metric("📅 Última fecha", str(ultima_fecha.date()))
-        # b.metric("🆔 Partidos Jugados", last_id)
-        
-        # a.metric("🆔 Partidos Jugados", last_id)
-        # b.metric("📅 Última fecha", str(ultima_fecha.date()))
-        # c.metric("⚽ Marcador", f"amarillo {ma} - {mz} azul")
-
         a, b, c, d = st.columns(4)
 
         a.metric("🆔 Partido Jugado", last_id)
@@ -376,8 +395,6 @@ agg.loc[agg["sancion_grave"] == 1, "puntos_total"] = 0
 
 # =========================
 # Valla menos vencida (Opción 2): usa gol_recibido / partidos_equivalentes
-# - cálculo con decimales completos
-# - visualización a 2 decimales
 # =========================
 mask_arq = (agg["posicion"] == "arquero") & (agg["partidos_equivalentes"] > 0)
 
@@ -392,11 +409,7 @@ agg.loc[mask_arq, "puntos_arquero_ajustados"] = (
 )
 
 # =========================
-# Ranking con desempate:
-# 1) puntos
-# 2) partidos_jugados (asistencia)
-# 3) goles
-# 4) asistencia_gol
+# Ranking con desempate
 # =========================
 def rank_puntos(df_in, use_arquero_ajustado=False):
     df = df_in.copy()
@@ -422,8 +435,6 @@ st.markdown(f"## 🧾 Ranking por posición de la última fecha – {ultima_fech
 def ranking_ultima_fecha_por_pos(pos):
     dfp = base_ultima_fecha[base_ultima_fecha["posicion"] == pos].copy()
 
-    # ✅ NUEVO: si es ranking de defensas de la última fecha,
-    # excluimos a los que jugaron de delantero (fue_delantero=1)
     if pos == "defensa":
         dfp = dfp[dfp["fue_delantero"] == 0].copy()
     if dfp.empty:
@@ -440,7 +451,6 @@ def ranking_ultima_fecha_por_pos(pos):
 
     r["puntos"] = pd.to_numeric(r["puntos"], errors="coerce").fillna(0.0).astype(float)
 
-    # desempate: puntos -> partido_completado -> goles -> asistencias
     r = r.sort_values(
         by=["puntos","partido_completado","goles","asistencia_gol"],
         ascending=[False, False, False, False]
@@ -458,7 +468,13 @@ for i, pos in enumerate(pos_list):
         if r.empty:
             st.info("Sin datos para esta posición en la última fecha.")
         else:
-            st.dataframe(r, use_container_width=True)
+            # ✅ Mostrar primero la columna que manda (puntos) y resaltarla
+            show = r[["posicion_ranking","nombre","puntos","partido_completado","goles","asistencia_gol","amarillas","rojas"]].copy()
+            st.dataframe(
+                df_highlight(show, "puntos", formats={"puntos": "{:.2f}", "partido_completado": "{:.2f}"}),
+                use_container_width=True
+            )
+
             fig, ax = plt.subplots()
             ax.bar(r["nombre"], r["puntos"])
             ax.set_title(f"Puntos (última fecha) - {pos.capitalize()}")
@@ -480,20 +496,32 @@ def show_rank_acum(pos):
     if pos == "arquero":
         ranked = rank_puntos(dfp, use_arquero_ajustado=True)
         st.caption("Nota: Arqueros usan Puntos Ajustados = Puntos Totales - Valla (goles_recibidos_arquero/partidos_equivalentes).")
+
+        ranked["valla_2d"] = pd.to_numeric(ranked["valla_promedio"], errors="coerce").round(2)
+
+        # ✅ Mostrar primero el criterio que manda: puntos_arquero_ajustados
         show_cols = [
             "posicion_ranking","nombre",
-            "puntos_total","valla_promedio","puntos_arquero_ajustados",
+            "puntos_arquero_ajustados","puntos_total","valla_2d",
             "partidos_jugados","partidos_equivalentes","goles","asistencia_gol","amarillas","rojas"
         ]
         ycol = "puntos_arquero_ajustados"
+        highlight = "puntos_arquero_ajustados"
+        fmts = {"puntos_arquero_ajustados": "{:.2f}", "valla_2d": "{:.2f}"}
     else:
         ranked = rank_puntos(dfp, use_arquero_ajustado=False)
+        # ✅ Mostrar primero el criterio que manda: puntos_total
         show_cols = ["posicion_ranking","nombre","puntos_total","partidos_jugados","partidos_equivalentes","goles","asistencia_gol","amarillas","rojas"]
         ycol = "puntos_total"
+        highlight = "puntos_total"
+        fmts = {"puntos_total": "{:.2f}"}
 
-    # asegurar numérico para gráfico
     ranked[ycol] = pd.to_numeric(ranked[ycol], errors="coerce").fillna(0.0).astype(float)
-    st.dataframe(ranked[show_cols], use_container_width=True)
+
+    st.dataframe(
+        df_highlight(ranked[show_cols], highlight, formats=fmts),
+        use_container_width=True
+    )
 
     fig, ax = plt.subplots()
     ax.bar(ranked["nombre"], ranked[ycol])
@@ -519,7 +547,10 @@ with c1:
     goleador = agg_activos.sort_values(by=["goles","partidos_jugados"], ascending=[False, False]).reset_index(drop=True)
     goleador = goleador[goleador["goles"] > 0].copy()
     goleador.insert(0, "posicion_ranking", range(1, len(goleador) + 1))
-    st.dataframe(goleador[["posicion_ranking","nombre","goles","partidos_jugados","partidos_equivalentes"]], use_container_width=True)
+
+    show = goleador[["posicion_ranking","nombre","goles","partidos_jugados","partidos_equivalentes"]].copy()
+    st.dataframe(df_highlight(show, "goles"), use_container_width=True)
+
     if not goleador.empty:
         fig, ax = plt.subplots()
         ax.bar(goleador["nombre"], goleador["goles"])
@@ -532,7 +563,10 @@ with c2:
     asis = agg_activos.sort_values(by=["asistencia_gol","partidos_jugados"], ascending=[False, False]).reset_index(drop=True)
     asis = asis[asis["asistencia_gol"] > 0].copy()
     asis.insert(0, "posicion_ranking", range(1, len(asis) + 1))
-    st.dataframe(asis[["posicion_ranking","nombre","asistencia_gol","partidos_jugados","partidos_equivalentes"]], use_container_width=True)
+
+    show = asis[["posicion_ranking","nombre","asistencia_gol","partidos_jugados","partidos_equivalentes"]].copy()
+    st.dataframe(df_highlight(show, "asistencia_gol"), use_container_width=True)
+
     if not asis.empty:
         fig, ax = plt.subplots()
         ax.bar(asis["nombre"], asis["asistencia_gol"])
@@ -546,20 +580,23 @@ with c3:
     am = agg_activos.sort_values(by=["amarillas","partidos_jugados"], ascending=[False, False]).reset_index(drop=True)
     am = am[am["amarillas"] > 0].copy()
     am.insert(0, "posicion_ranking", range(1, len(am) + 1))
-    st.dataframe(am[["posicion_ranking","nombre","amarillas","partidos_jugados","partidos_equivalentes"]], use_container_width=True)
+    show = am[["posicion_ranking","nombre","amarillas","partidos_jugados","partidos_equivalentes"]].copy()
+    st.dataframe(df_highlight(show, "amarillas"), use_container_width=True)
 
 with c4:
     st.subheader("🟥 Ranking rojas")
     rj = agg_activos.sort_values(by=["rojas","partidos_jugados"], ascending=[False, False]).reset_index(drop=True)
     rj = rj[rj["rojas"] > 0].copy()
     rj.insert(0, "posicion_ranking", range(1, len(rj) + 1))
-    st.dataframe(rj[["posicion_ranking","nombre","rojas","partidos_jugados","partidos_equivalentes"]], use_container_width=True)
+    show = rj[["posicion_ranking","nombre","rojas","partidos_jugados","partidos_equivalentes"]].copy()
+    st.dataframe(df_highlight(show, "rojas"), use_container_width=True)
 
 st.subheader("🤦 Ranking autogoles")
 ag = agg_activos.sort_values(by=["autogoles","partidos_jugados"], ascending=[False, False]).reset_index(drop=True)
 ag = ag[ag["autogoles"] > 0].copy()
 ag.insert(0, "posicion_ranking", range(1, len(ag) + 1))
-st.dataframe(ag[["posicion_ranking","nombre","autogoles","partidos_jugados","partidos_equivalentes"]], use_container_width=True)
+show = ag[["posicion_ranking","nombre","autogoles","partidos_jugados","partidos_equivalentes"]].copy()
+st.dataframe(df_highlight(show, "autogoles"), use_container_width=True)
 
 # =========================
 # 4) Valla menos vencida (mostrar 2 decimales)
@@ -574,10 +611,14 @@ valla["valla_promedio_2d"] = valla["valla_promedio_num"].round(2)
 valla = valla.sort_values(by=["valla_promedio_num","partidos_equivalentes"], ascending=[True, False]).reset_index(drop=True)
 valla.insert(0, "posicion_ranking", range(1, len(valla) + 1))
 
-st.dataframe(
-    valla[["posicion_ranking","nombre","valla_promedio_2d","goles_recibidos_arquero","partidos_equivalentes","partidos_jugados","puntos_total","puntos_arquero_ajustados"]],
-    use_container_width=True
-)
+# ✅ Mostrar primero la valla (criterio del ranking) y resaltarla
+show = valla[[
+    "posicion_ranking","nombre",
+    "valla_promedio_2d",
+    "goles_recibidos_arquero","partidos_equivalentes","partidos_jugados",
+    "puntos_total","puntos_arquero_ajustados"
+]].copy()
+st.dataframe(df_highlight(show, "valla_promedio_2d", formats={"valla_promedio_2d": "{:.2f}"}), use_container_width=True)
 
 fig, ax = plt.subplots()
 ax.bar(valla["nombre"], valla["valla_promedio_num"])
@@ -650,7 +691,6 @@ reg["indice_regularidad"] = (
     0.10 * reg["score_disciplina"]
 ).round(4)
 
-# desempate: índice -> partidos_jugados -> goles -> asistencias
 reg = reg.sort_values(
     by=["indice_regularidad","partidos_jugados","goles","asistencia_gol"],
     ascending=[False, False, False, False]
@@ -658,10 +698,9 @@ reg = reg.sort_values(
 
 reg.insert(0, "posicion_ranking", range(1, len(reg) + 1))
 
-st.dataframe(
-    reg[["posicion_ranking","nombre","posicion","indice_regularidad","partidos_jugados","partidos_equivalentes","puntos_total","goles","asistencia_gol","amarillas","rojas"]],
-    use_container_width=True
-)
+# ✅ Mostrar primero el índice (criterio) y resaltarlo
+show = reg[["posicion_ranking","nombre","indice_regularidad","posicion","partidos_jugados","partidos_equivalentes","puntos_total","goles","asistencia_gol","amarillas","rojas"]].copy()
+st.dataframe(df_highlight(show, "indice_regularidad", formats={"indice_regularidad": "{:.4f}"}), use_container_width=True)
 
 fig, ax = plt.subplots()
 ax.bar(reg["nombre"], reg["indice_regularidad"])
@@ -673,7 +712,6 @@ st.markdown("---")
 
 with st.expander("📆 ¿Quieres ver los datos de una fecha diferente?", expanded=False):
 
-    # Lista de partidos disponibles (más reciente primero)
     part_sel = partidos_df.dropna(subset=["id_partido", "fecha"]).copy()
     part_sel = part_sel.sort_values(["fecha", "id_partido"], ascending=[False, False])
 
@@ -698,7 +736,6 @@ with st.expander("📆 ¿Quieres ver los datos de una fecha diferente?", expande
         ma = int(row["marcador_amarillo"]) if pd.notna(row["marcador_amarillo"]) else 0
         mz = int(row["marcador_azul"]) if pd.notna(row["marcador_azul"]) else 0
 
-        # Panel gris
         st.markdown("<div class='kpi-box'>", unsafe_allow_html=True)
 
         a, b, c, d = st.columns(4)
@@ -718,7 +755,6 @@ with st.expander("📆 ¿Quieres ver los datos de una fecha diferente?", expande
 
         st.markdown("</div>", unsafe_allow_html=True)
 
-        # Rankings SOLO DEL DÍA
         st.markdown(f"### 🧾 Rankings del día – {fsel}")
 
         base_dia = base[(base["id_partido"] == pid) & (base["activo"] == 1)].copy()
@@ -758,9 +794,9 @@ with st.expander("📆 ¿Quieres ver los datos de una fecha diferente?", expande
                 if r.empty:
                     st.info("Sin datos para esta posición ese día.")
                 else:
-                    st.dataframe(r, use_container_width=True)
+                    show = r[["posicion_ranking","nombre","puntos","partido_completado","goles","asistencia_gol","amarillas","rojas"]].copy()
+                    st.dataframe(df_highlight(show, "puntos", formats={"puntos": "{:.2f}", "partido_completado": "{:.2f}"}), use_container_width=True)
 
-        # Acumulados a esa fecha
         ver_acum = st.checkbox(f"Mostrar acumulados a esa fecha ({fsel})", value=True)
 
         if ver_acum:
@@ -790,6 +826,8 @@ with st.expander("📆 ¿Quieres ver los datos de una fecha diferente?", expande
 
                 if pos == "arquero":
                     dfp["valla_2d"] = pd.to_numeric(dfp["valla_promedio"], errors="coerce").round(2)
-                    st.dataframe(dfp[["posicion_ranking","nombre","puntos_total","valla_2d","puntos_arquero_ajustados","partidos_jugados","goles","asistencia_gol"]], use_container_width=True)
+                    show = dfp[["posicion_ranking","nombre","puntos_arquero_ajustados","puntos_total","valla_2d","partidos_jugados","goles","asistencia_gol"]].copy()
+                    st.dataframe(df_highlight(show, "puntos_arquero_ajustados", formats={"puntos_arquero_ajustados": "{:.2f}", "valla_2d": "{:.2f}"}), use_container_width=True)
                 else:
-                    st.dataframe(dfp[["posicion_ranking","nombre","puntos_total","partidos_jugados","goles","asistencia_gol"]], use_container_width=True)
+                    show = dfp[["posicion_ranking","nombre","puntos_total","partidos_jugados","goles","asistencia_gol"]].copy()
+                    st.dataframe(df_highlight(show, "puntos_total", formats={"puntos_total": "{:.2f}"}), use_container_width=True)
