@@ -3,6 +3,8 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from datetime import datetime
 from PIL import Image
+from zoneinfo import ZoneInfo
+
 
 # =========================
 # Configuración Streamlit
@@ -82,7 +84,9 @@ with col2:
 
 st.title("⚽ Estadísticas Legendarios FC - Temporada 2026")
 
-ultima_actualizacion = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+# ultima_actualizacion = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+ultima_actualizacion = datetime.now(ZoneInfo("America/Bogota")).strftime("%Y-%m-%d %H:%M:%S")
+
 st.markdown(
     f"<div style='text-align: right; font-size: 12px; color: gray;'>Última actualización: {ultima_actualizacion}</div>",
     unsafe_allow_html=True
@@ -310,7 +314,7 @@ if pd.notna(ultima_fecha):
         st.markdown("<div class='kpi-box'>", unsafe_allow_html=True)
 
         a, b, c, d = st.columns(4)
-        a.metric("🆔 Partido Jugado", last_id)
+        a.metric("🆔 Partidos Jugado", last_id)
         b.metric("📅 Última fecha", str(ultima_fecha.date()))
         c.metric("📍 Cancha", cancha_val)
 
