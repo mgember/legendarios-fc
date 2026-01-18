@@ -314,7 +314,7 @@ if pd.notna(ultima_fecha):
         st.markdown("<div class='kpi-box'>", unsafe_allow_html=True)
 
         a, b, c, d = st.columns(4)
-        a.metric("🆔 Partidos Jugado", last_id)
+        a.metric("🆔 Partidos Jugados", last_id)
         b.metric("📅 Última fecha", str(ultima_fecha.date()))
         c.metric("📍 Cancha", cancha_val)
 
