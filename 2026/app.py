@@ -88,16 +88,46 @@ st.markdown(
 # =========================
 # Acceso
 # =========================
-CLAVE = "LEGENDARIOS2026"
+
+CLAVE_USER = "LEGENDARIOS2026"
+CLAVE_ADMIN = "legendarios"
+
 clave_usuario = st.text_input("🔐 Ingresa tu código de acceso", type="password")
-if clave_usuario != CLAVE:
+
+if clave_usuario not in [CLAVE_USER, CLAVE_ADMIN]:
     st.warning("⚠️ Ingresa el código correcto para ver las estadísticas.")
     st.stop()
 
-# Botón para cache
-if st.button("🔄 Recargar datos (limpiar cache)"):
-    st.cache_data.clear()
-    st.rerun()
+es_admin = (clave_usuario == CLAVE_ADMIN)
+
+# ======= AQUÍ VA EL BLOQUE DE TRACKING =======
+
+import sqlite3
+import uuid
+from pathlib import Path
+
+DB_PATH = Path("2026/analytics.db")
+
+def track_visit():
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS visits (
+            ts TEXT,
+            session_id TEXT
+        )
+    """)
+
+    if "session_id" not in st.session_state:
+        st.session_state["session_id"] = str(uuid.uuid4())
+
+    ts = datetime.now(ZoneInfo("America/Bogota")).strftime("%Y-%m-%d %H:%M:%S")
+    cur.execute("INSERT INTO visits (ts, session_id) VALUES (?, ?)", (ts, st.session_state["session_id"]))
+    conn.commit()
+    conn.close()
+
+track_visit()
 
 # =========================
 # Parámetros / constantes
@@ -872,3 +902,19 @@ with st.expander("📆 ¿Quieres ver los datos de una fecha diferente?", expande
                 else:
                     show = dfp[["posicion_ranking","nombre","puntos_total","partidos_jugados","goles","asistencia_gol"]].copy()
                     st.dataframe(df_highlight(show, "puntos_total"), use_container_width=True)
+
+if es_admin:
+    with st.expander("📈 Analítica de uso (solo admin)", expanded=False):
+        conn = sqlite3.connect(DB_PATH)
+        dfv = pd.read_sql_query("SELECT * FROM visits", conn)
+        conn.close()
+
+        st.metric("👀 Visitas totales", len(dfv))
+        st.metric("👤 Sesiones únicas", dfv["session_id"].nunique())
+
+        if len(dfv):
+            dfv["dia"] = pd.to_datetime(dfv["ts"]).dt.date
+            por_dia = dfv.groupby("dia").size().reset_index(name="visitas").sort_values("dia", ascending=False)
+
+            st.markdown("### 📅 Visitas por día")
+            st.dataframe(por_dia, use_container_width=True)
