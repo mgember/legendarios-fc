@@ -90,7 +90,7 @@ st.markdown(
 # =========================
 
 CLAVE_USER = "enpausa"
-CLAVE_ADMIN = "legendarios"
+CLAVE_ADMIN = "legendariosgms"
 
 clave_usuario = st.text_input("🔐 Ingresa tu código de acceso", type="password")
 
